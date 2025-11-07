@@ -42,9 +42,9 @@ export function Sidebar() {
 
   return (
     <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
-      <div className="flex grow flex-col border-r border-gray-200 bg-white">
+      <div className="flex h-full flex-col border-r border-gray-200 bg-white">
         {/* Sticky Header */}
-        <div className="sticky top-0 z-10 bg-white flex h-16 shrink-0 items-center border-b border-gray-200 px-6">
+        <div className="flex h-16 shrink-0 items-center border-b border-gray-200 px-6 bg-white">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-400 rounded-lg flex items-center justify-center">
               <Milk className="w-6 h-6 text-white" />
@@ -56,8 +56,8 @@ export function Sidebar() {
           </div>
         </div>
         {/* Scrollable Navigation */}
-        <nav className="flex flex-1 flex-col overflow-y-auto px-6 py-5">
-          <ul role="list" className="flex flex-1 flex-col gap-y-1">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
+          <ul role="list" className="flex flex-col gap-y-1 pb-4">
             {navigation.map((item) => {
               const isActive = pathname === item.href
               return (
