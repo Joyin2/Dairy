@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import bcrypt from 'bcryptjs'
+import { supabaseAuth } from '@/lib/supabase-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +11,7 @@ const VALID_ADMIN_CODES = [
   'DAIRYFLOW-ADMIN'
 ]
 
-// Signup endpoint
+// Signup endpoint with Supabase Auth
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if email already exists
+    // Check if email already exists in database
     const existingUsers = await db.custom(
       'SELECT id FROM app_users WHERE email = $1',
       [email.toLowerCase()]
@@ -79,19 +79,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Hash password
-    const saltRounds = 10
-    const passwordHash = await bcrypt.hash(password, saltRounds)
-
     // Determine user role and status
     const userRole = isMobileSignup ? role : 'company_admin'
     const userStatus = isMobileSignup ? 'pending' : 'active'
 
-    // Create user
+    // Sign up with Supabase Auth
+    const authData = await supabaseAuth.signUp(
+      email.toLowerCase(),
+      password,
+      {
+        name,
+        phone: phone || null,
+        role: userRole,
+      }
+    )
+
+    if (!authData.user) {
+      return NextResponse.json(
+        { error: 'Failed to create authentication account' },
+        { status: 500 }
+      )
+    }
+
+    // Create user record in database
     const newUser = await db.insert('app_users', {
+      auth_uid: authData.user.id,
       name,
       email: email.toLowerCase(),
-      password_hash: passwordHash,
       role: userRole,
       phone: phone || null,
       status: userStatus,
@@ -126,6 +140,14 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Signup error:', error)
     
+    // Handle Supabase auth errors
+    if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
+      return NextResponse.json(
+        { error: 'Email already registered' },
+        { status: 409 }
+      )
+    }
+
     // Handle unique constraint violation
     if (error.message?.includes('duplicate key')) {
       return NextResponse.json(

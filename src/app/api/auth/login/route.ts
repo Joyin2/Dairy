@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import bcrypt from 'bcryptjs'
+import { supabaseAuth } from '@/lib/supabase-auth'
 
 export const dynamic = 'force-dynamic'
 
-// Login endpoint
+// Login endpoint with Supabase Auth
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -20,49 +20,58 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find user by email
+    // Authenticate with Supabase Auth
+    const authData = await supabaseAuth.signIn(email.toLowerCase(), password)
+    
+    if (!authData.user || !authData.session) {
+      console.log('[LOGIN] Supabase authentication failed')
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      )
+    }
+
+    console.log('[LOGIN] Supabase auth successful for:', authData.user.id)
+
+    // Get user data from database
     const users = await db.custom(
-      'SELECT * FROM app_users WHERE email = $1 LIMIT 1',
-      [email.toLowerCase()]
+      'SELECT * FROM app_users WHERE auth_uid = $1 OR email = $2 LIMIT 1',
+      [authData.user.id, email.toLowerCase()]
     )
 
-    console.log('[LOGIN] Users found:', users.length)
-
+    let user
     if (!users || users.length === 0) {
-      console.log('[LOGIN] User not found')
-      return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      )
-    }
+      // Create user record if doesn't exist (first time Supabase user)
+      console.log('[LOGIN] Creating new user record for Supabase user')
+      const newUser = await db.insert('app_users', {
+        auth_uid: authData.user.id,
+        email: email.toLowerCase(),
+        name: authData.user.user_metadata?.name || email.split('@')[0],
+        role: authData.user.user_metadata?.role || 'company_admin',
+        phone: authData.user.user_metadata?.phone || null,
+        status: 'active',
+        created_at: new Date().toISOString(),
+        last_login: new Date().toISOString()
+      })
+      user = newUser[0]
+    } else {
+      user = users[0]
+      console.log('[LOGIN] User found:', { id: user.id, email: user.email, status: user.status, role: user.role })
 
-    const user = users[0]
-    console.log('[LOGIN] User found:', { id: user.id, email: user.email, status: user.status, role: user.role })
-
-    // Check if password hash exists
-    if (!user.password_hash) {
-      console.log('[LOGIN] No password hash found for user')
-      return NextResponse.json(
-        { error: 'Account not set up for password login' },
-        { status: 401 }
-      )
-    }
-
-    // Verify password
-    const passwordMatch = await bcrypt.compare(password, user.password_hash)
-    console.log('[LOGIN] Password match:', passwordMatch)
-
-    if (!passwordMatch) {
-      console.log('[LOGIN] Invalid password')
-      return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      )
+      // Update auth_uid if not set
+      if (!user.auth_uid) {
+        await db.update('app_users', 
+          { auth_uid: authData.user.id },
+          { id: user.id }
+        )
+        user.auth_uid = authData.user.id
+      }
     }
 
     // Check user status for mobile users
     if (user.status === 'pending') {
       console.log('[LOGIN] User status is pending')
+      await supabaseAuth.signOut() // Sign out from Supabase
       return NextResponse.json(
         { error: 'Your account is pending admin approval. Please contact the administrator.' },
         { status: 403 }
@@ -71,17 +80,12 @@ export async function POST(request: NextRequest) {
 
     if (user.status === 'suspended' || user.status === 'inactive') {
       console.log('[LOGIN] User status is suspended/inactive:', user.status)
+      await supabaseAuth.signOut() // Sign out from Supabase
       return NextResponse.json(
         { error: 'Your account has been suspended. Please contact the administrator.' },
         { status: 403 }
       )
     }
-
-    // Allow login for all active users (admin, delivery_agent, manufacturer)
-    console.log('[LOGIN] Login successful for user:', user.email)
-
-    // Generate simple token (in production, use JWT)
-    const token = Buffer.from(`${user.id}:${Date.now()}`).toString('base64')
 
     // Update last login
     await db.custom(
@@ -89,10 +93,12 @@ export async function POST(request: NextRequest) {
       [user.id]
     )
 
+    console.log('[LOGIN] Login successful for user:', user.email)
+
     return NextResponse.json({
       success: true,
       data: {
-        token,
+        token: authData.session.access_token, // Use Supabase JWT
         user: {
           id: user.id,
           name: user.name,
