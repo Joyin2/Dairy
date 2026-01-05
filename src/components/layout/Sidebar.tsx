@@ -16,7 +16,8 @@ import {
   MapPin,
   Bell,
   FileText,
-  Activity
+  Activity,
+  ShoppingBag
 } from 'lucide-react'
 
 const navigation = [
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Suppliers', href: '/admin/suppliers', icon: Milk },
   { name: 'Shops', href: '/admin/shops', icon: Store },
+  { name: 'Products', href: '/admin/products', icon: ShoppingBag },
   { name: 'Collections', href: '/admin/collections', icon: Milk },
   { name: 'Batches', href: '/admin/batches', icon: Package },
   { name: 'Inventory', href: '/admin/inventory', icon: Package },

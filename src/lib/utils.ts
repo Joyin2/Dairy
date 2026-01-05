@@ -32,6 +32,19 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
-export function formatNumber(num: number, decimals: number = 2): string {
-  return num.toFixed(decimals)
+export function formatNumber(num: number | string | null | undefined, decimals: number = 2): string {
+  // Handle null, undefined, or empty string
+  if (num === null || num === undefined || num === '') {
+    return '0.00'
+  }
+  
+  // Convert to number if it's a string
+  const numValue = typeof num === 'string' ? parseFloat(num) : num
+  
+  // Check if it's a valid number
+  if (isNaN(numValue)) {
+    return '0.00'
+  }
+  
+  return numValue.toFixed(decimals)
 }

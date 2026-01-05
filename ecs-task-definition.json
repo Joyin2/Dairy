@@ -1,0 +1,84 @@
+{
+  "family": "dairy-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::612069931695:role/ecsTaskExecutionRole-dairy",
+  "containerDefinitions": [
+    {
+      "name": "dairy-app",
+      "image": "612069931695.dkr.ecr.us-east-1.amazonaws.com/dairy-app:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "AWS_RDS_HOST",
+          "value": "dairyproject.c4bcgmceqsoh.us-east-1.rds.amazonaws.com"
+        },
+        {
+          "name": "AWS_RDS_PORT",
+          "value": "5432"
+        },
+        {
+          "name": "AWS_RDS_DATABASE",
+          "value": "dairy_management"
+        },
+        {
+          "name": "DATABASE_MAX_CONNECTIONS",
+          "value": "50"
+        },
+        {
+          "name": "DATABASE_IDLE_TIMEOUT",
+          "value": "30000"
+        },
+        {
+          "name": "DATABASE_CONNECTION_TIMEOUT",
+          "value": "5000"
+        },
+        {
+          "name": "NEXT_PUBLIC_APP_URL",
+          "value": "https://your-domain.com"
+        },
+        {
+          "name": "NEXT_PUBLIC_API_URL",
+          "value": "https://your-domain.com/api"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "AWS_RDS_USER",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:612069931695:secret:dairy-app/rds-credentials:username::"
+        },
+        {
+          "name": "AWS_RDS_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:612069931695:secret:dairy-app/rds-credentials:password::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/dairy-app",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}
