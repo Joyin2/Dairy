@@ -17,6 +17,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { name, email, password, phone, role, admin_code } = body
 
+    console.log('[SIGNUP] Signup attempt for email:', email)
+
     // Check if it's admin signup or mobile app signup
     const isMobileSignup = role && (role === 'delivery_agent' || role === 'manufacturer')
     const isAdminSignup = admin_code
@@ -73,6 +75,7 @@ export async function POST(request: NextRequest) {
     )
 
     if (existingUsers && existingUsers.length > 0) {
+      console.log('[SIGNUP] Email already exists in database')
       return NextResponse.json(
         { error: 'Email already registered' },
         { status: 409 }
@@ -83,6 +86,8 @@ export async function POST(request: NextRequest) {
     const userRole = isMobileSignup ? role : 'company_admin'
     const userStatus = isMobileSignup ? 'pending' : 'active'
 
+    console.log('[SIGNUP] Creating Supabase Auth user')
+    
     // Sign up with Supabase Auth
     const authData = await supabaseAuth.signUp(
       email.toLowerCase(),
@@ -95,13 +100,24 @@ export async function POST(request: NextRequest) {
     )
 
     if (!authData.user) {
+      console.error('[SIGNUP] No user returned from Supabase')
       return NextResponse.json(
         { error: 'Failed to create authentication account' },
         { status: 500 }
       )
     }
 
+    console.log('[SIGNUP] Supabase user created:', authData.user.id)
+    
+    // Check if session was created (email confirmation may be enabled)
+    if (!authData.session) {
+      console.warn('[SIGNUP] No session created - email confirmation may be required')
+      console.warn('[SIGNUP] Please disable email confirmation in Supabase dashboard:')
+      console.warn('[SIGNUP] Authentication > Settings > Enable email confirmations = OFF')
+    }
+
     // Create user record in database
+    console.log('[SIGNUP] Creating app_users record')
     const newUser = await db.insert('app_users', {
       auth_uid: authData.user.id,
       name,
@@ -111,6 +127,8 @@ export async function POST(request: NextRequest) {
       status: userStatus,
       created_at: new Date().toISOString()
     })
+
+    console.log('[SIGNUP] User created successfully:', newUser[0].id)
 
     // Different response based on signup type
     if (isMobileSignup) {
@@ -123,7 +141,8 @@ export async function POST(request: NextRequest) {
           email: newUser[0].email,
           role: newUser[0].role,
           status: newUser[0].status
-        }
+        },
+        requiresEmailConfirmation: !authData.session
       }, { status: 201 })
     } else {
       return NextResponse.json({
@@ -134,7 +153,8 @@ export async function POST(request: NextRequest) {
           name: newUser[0].name,
           email: newUser[0].email,
           role: newUser[0].role
-        }
+        },
+        requiresEmailConfirmation: !authData.session
       }, { status: 201 })
     }
   } catch (error: any) {
@@ -159,6 +179,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Email already registered' },
         { status: 409 }
+      )
+    }
+
+    // Handle email confirmation errors
+    if (error.message?.includes('Email not confirmed') || error.message?.includes('email_confirm')) {
+      return NextResponse.json(
+        { 
+          error: 'Please check your email and confirm your account before logging in',
+          requiresEmailConfirmation: true
+        },
+        { status: 400 }
       )
     }
 

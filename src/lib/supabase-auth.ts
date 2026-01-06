@@ -14,6 +14,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 export const supabaseAuth = {
   /**
    * Sign up a new user with email and password
+   * Email confirmation is disabled by default for admin signup
    */
   async signUp(email: string, password: string, metadata?: { name?: string; phone?: string; role?: string }) {
     const { data, error } = await supabase.auth.signUp({
@@ -21,10 +22,20 @@ export const supabaseAuth = {
       password,
       options: {
         data: metadata,
+        emailRedirectTo: undefined, // Disable email confirmation redirect
       },
     })
 
-    if (error) throw error
+    if (error) {
+      console.error('[SUPABASE_AUTH] Signup error:', error)
+      throw error
+    }
+    
+    // Check if email confirmation is required
+    if (data.user && !data.session) {
+      console.warn('[SUPABASE_AUTH] Email confirmation required - user created but no session')
+    }
+    
     return data
   },
 

@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Authenticate with Supabase Auth
+    console.log('[LOGIN] Authenticating with Supabase')
     const authData = await supabaseAuth.signIn(email.toLowerCase(), password)
     
     if (!authData.user || !authData.session) {
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
 
       // Update auth_uid if not set
       if (!user.auth_uid) {
+        console.log('[LOGIN] Updating auth_uid for existing user')
         await db.update('app_users', 
           { auth_uid: authData.user.id },
           { id: user.id }
@@ -95,21 +97,43 @@ export async function POST(request: NextRequest) {
 
     console.log('[LOGIN] Login successful for user:', user.email)
 
+    // Return success with token and user data
     return NextResponse.json({
       success: true,
       data: {
         token: authData.session.access_token, // Use Supabase JWT
+        refreshToken: authData.session.refresh_token,
+        expiresAt: authData.session.expires_at,
         user: {
           id: user.id,
+          auth_uid: user.auth_uid,
           name: user.name,
           email: user.email,
           role: user.role,
-          phone: user.phone
+          phone: user.phone,
+          status: user.status,
+          lastLogin: user.last_login
         }
       }
     })
   } catch (error: any) {
     console.error('[LOGIN] Error:', error)
+    
+    // Handle specific auth errors
+    if (error.message?.includes('Invalid login credentials')) {
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      )
+    }
+    
+    if (error.message?.includes('Email not confirmed')) {
+      return NextResponse.json(
+        { error: 'Please confirm your email before logging in' },
+        { status: 401 }
+      )
+    }
+    
     return NextResponse.json(
       { error: error.message || 'Login failed' },
       { status: 500 }
