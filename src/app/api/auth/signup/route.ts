@@ -138,7 +138,13 @@ export async function POST(request: NextRequest) {
       }, { status: 201 })
     }
   } catch (error: any) {
-    console.error('Signup error:', error)
+    console.error('[SIGNUP] Full error:', {
+      message: error.message,
+      code: error.code,
+      status: error.status,
+      stack: error.stack,
+      details: error
+    })
     
     // Handle Supabase auth errors
     if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
@@ -156,8 +162,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Return detailed error for debugging
     return NextResponse.json(
-      { error: error.message || 'Signup failed' },
+      { 
+        error: error.message || 'Signup failed',
+        details: process.env.NODE_ENV === 'development' ? error.toString() : undefined
+      },
       { status: 500 }
     )
   }
